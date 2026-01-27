@@ -70,6 +70,7 @@ UCF101/
 # Ignore report and readme
 AI_video_detector_report.tex
 README.md
+TODO.md
 
 # OS files
 .DS_Store
