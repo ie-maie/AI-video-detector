@@ -59,7 +59,6 @@ coverage.xml
 # Data and models
 /data/
 /models/
-/results/
 
 # Virtual environments
 venv/
@@ -71,7 +70,6 @@ UCF101/
 AI_video_detector_report.tex
 README.md
 TODO.md
-
 # OS files
 .DS_Store
 Thumbs.db
