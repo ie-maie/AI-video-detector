@@ -16,11 +16,34 @@ cv2.setLogLevel(0)
 class VideoDataset(Dataset):
     def __init__(self, data_dir='data', split='train', transform=None, seq_len=30, frame_size=(224, 224), use_preextracted=True):
         self.data_dir = data_dir
-        self.transform = transform
+        self.split = split
         self.seq_len = seq_len
         self.frame_size = frame_size
         self.use_preextracted = use_preextracted
         self.frames_dir = os.path.join(data_dir, 'frames')
+
+        # Set up transforms
+        if transform is not None:
+            self.transform = transform
+        else:
+            if split == 'train':
+                # Data augmentation for training
+                self.transform = transforms.Compose([
+                    transforms.ToPILImage(),
+                    transforms.RandomHorizontalFlip(p=0.5),
+                    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+                    transforms.RandomResizedCrop(size=self.frame_size, scale=(0.8, 1.0)),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                ])
+            else:
+                # Only normalization for validation/test
+                self.transform = transforms.Compose([
+                    transforms.ToPILImage(),
+                    transforms.Resize(self.frame_size),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                ])
         
         # Check if pre-extracted frames are available
         self.has_preextracted = os.path.exists(self.frames_dir) and len(os.listdir(self.frames_dir)) > 0
@@ -73,9 +96,9 @@ class VideoDataset(Dataset):
                 try:
                     frames_array = np.load(frames_file)  # Shape: (30, 224, 224, 3)
                     frames = [frames_array[i] for i in range(frames_array.shape[0])]
-                    
-                    # Convert to tensors and normalize
-                    frames = [torch.tensor(frame).permute(2, 0, 1).float() / 255 for frame in frames]
+
+                    # Apply transforms to each frame
+                    frames = [self.transform(frame) for frame in frames]
                     return torch.stack(frames), label
                 except Exception as e:
                     # Fallback to on-the-fly extraction if pre-extracted fails
@@ -131,11 +154,11 @@ class VideoDataset(Dataset):
                 else:
                     raise ValueError("No valid frames extracted")
             
-            # Apply transforms if any
+            # Apply transforms to each frame
             if self.transform:
                 frames = [self.transform(frame) for frame in frames]
             else:
-                # Default: convert to tensor and normalize
+                # Fallback: convert to tensor and normalize
                 frames = [torch.tensor(frame).permute(2, 0, 1).float() / 255 for frame in frames]
             
             return torch.stack(frames), label

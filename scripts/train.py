@@ -12,6 +12,24 @@ import os
 # Suppress OpenCV warnings and logs
 warnings.filterwarnings('ignore')
 os.environ['OPENCV_VIDEOIO_DEBUG'] = '0'
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2.0, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        ce_loss = nn.functional.cross_entropy(inputs, targets, weight=self.alpha, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = (1 - pt) ** self.gamma * ce_loss
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
  
 def train(data_dir='data', batch_size=24, epochs=20, learning_rate=0.001, device=None):
     # Set device
@@ -69,7 +87,16 @@ def train(data_dir='data', batch_size=24, epochs=20, learning_rate=0.001, device
     
     # Initialize model
     model = VideoDetector().to(device)
-    criterion = nn.CrossEntropyLoss()
+
+    # Calculate class weights for balanced training (address class imbalance)
+    train_labels = [label for _, label in train_dataset]
+    class_counts = np.bincount(train_labels)
+    total_samples = len(train_labels)
+    class_weights = torch.tensor([total_samples / (len(class_counts) * count) for count in class_counts], dtype=torch.float).to(device)
+    print(f"Class weights: {class_weights}")
+
+    criterion = FocalLoss(alpha=class_weights, gamma=2.0)
+
     # Freeze early ResNet layers (critical fix)
     for name, param in model.cnn.named_parameters():
         if "layer4" not in name:
@@ -80,7 +107,10 @@ def train(data_dir='data', batch_size=24, epochs=20, learning_rate=0.001, device
     {'params': model.cnn.layer4.parameters(), 'lr': learning_rate * 0.1},
     {'params': model.lstm.parameters(), 'lr': learning_rate},
     {'params': model.fc.parameters(), 'lr': learning_rate},
-    ], weight_decay=1e-4)  # Added L2 regularization
+    ], weight_decay=5e-4)  # Increased L2 regularization to reduce overfitting
+
+    # Add learning rate scheduler
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=learning_rate * 0.01)
 
     
     print("=" * 60)
@@ -96,6 +126,7 @@ def train(data_dir='data', batch_size=24, epochs=20, learning_rate=0.001, device
     train_losses, val_losses = [], []
     train_accs, val_accs = [], []
     val_f1s = []
+    epochs_without_improvement = 0
 
     all_val_targets = []
     all_val_probs = []
@@ -178,14 +209,25 @@ def train(data_dir='data', batch_size=24, epochs=20, learning_rate=0.001, device
             best_val_acc = val_acc
             torch.save(model.state_dict(), 'models/best_model.pth')
             saved = "✓ (saved)"
+            epochs_without_improvement = 0  # Reset counter on improvement
         else:
             saved = ""
+            epochs_without_improvement += 1
 
         print(
             f"Epoch [{epoch+1}/{epochs}] "
             f"- Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f} | "
             f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val F1: {val_f1:.4f} {saved}"
         )
+
+        # Step the scheduler at the end of each epoch
+        scheduler.step()
+
+        # Early stopping check
+        patience = 8
+        if epochs_without_improvement >= patience:
+            print(f"\nEarly stopping triggered after {patience} epochs without improvement.")
+            break
 
     # ================= PLOTS =================
     plt.figure()
