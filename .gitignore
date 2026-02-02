@@ -76,3 +76,5 @@ Thumbs.db
 
 # Logs
 *.log
+data/
+models/*.pth
