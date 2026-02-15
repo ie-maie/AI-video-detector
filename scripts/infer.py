@@ -38,6 +38,20 @@ THRESHOLDS = {
 }
 # ----------------------------------------
 
+
+def center_crop_square(frame):
+    """
+    Center-crop a frame to square before resizing.
+    This reduces aspect-ratio distortion, especially for portrait TikTok videos.
+    """
+    if frame is None or frame.ndim < 2:
+        return frame
+    h, w = frame.shape[:2]
+    side = min(h, w)
+    y0 = max(0, (h - side) // 2)
+    x0 = max(0, (w - side) // 2)
+    return frame[y0:y0 + side, x0:x0 + side]
+
 def extract_frames_ffmpeg(video_path, num_frames=30):
     """Extract frames using FFMPEG directly - most reliable method"""
     try:
@@ -306,6 +320,7 @@ def infer(video_path, mode='f1'):
     ])
 
     frames = extract_frames(video_path, NUM_FRAMES)
+    frames = [center_crop_square(f) for f in frames]
     frames = torch.stack([transform(f) for f in frames])
     frames = frames.unsqueeze(0).to(device)  # (1, T, C, H, W)
 
