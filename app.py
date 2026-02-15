@@ -4,6 +4,7 @@ import cv2
 import tempfile
 import os
 import shutil
+import base64
 from pathlib import Path
 
 from src.model import VideoDetector
@@ -110,6 +111,20 @@ h1, h2, h3, .hero-title, .card-title, .stMetricLabel, .stButton button { font-fa
 }
 
 /* HERO */
+.hero-top-left{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    border: 1px solid var(--border);
+    background: rgba(5, 24, 31, 0.45);
+    border-radius: 999px;
+    padding: 0.28rem 0.74rem;
+    margin: 0 0 0.58rem 0.1rem;
+    color: rgba(232,245,244,0.92);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.22px;
+}
 .hero {
     border: 1px solid var(--border);
     background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
@@ -118,15 +133,45 @@ h1, h2, h3, .hero-title, .card-title, .stMetricLabel, .stButton button { font-fa
     box-shadow: 0 12px 30px rgba(0,0,0,0.32);
     backdrop-filter: blur(5px);
 }
+.hero-brand{
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+}
+.hero-copy{
+    width: 100%;
+}
+.hero-title-row{
+    display: flex;
+    align-items: center;
+    gap: 0.72rem;
+    flex-wrap: nowrap;
+}
+.hero-logo{
+    width: 64px;
+    min-width: 64px;
+    height: 64px;
+    object-fit: cover;
+    display: block;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.28);
+    background: rgba(2, 13, 24, 0.6);
+    padding: 2px;
+}
 .hero-title{
     font-size: 2.35rem;
     font-weight: 900;
     margin:0;
     letter-spacing: 0.2px;
     line-height:1.08;
-    background: linear-gradient(90deg, #f4fffd 0%, #b8fff1 42%, #a3d6ff 100%);
+    color: #f3fffd;
+}
+.hero-brand-name{
+    background: linear-gradient(90deg, #58e4c7 0%, #6ec9ff 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 14px rgba(88,228,199,0.20);
 }
 .hero-sub{ opacity: 0.86; margin-top: 0.45rem; margin-bottom: 0.95rem; font-size: 1.02rem; }
 
@@ -227,6 +272,10 @@ h1, h2, h3, .hero-title, .card-title, .stMetricLabel, .stButton button { font-fa
 /* Mobile */
 @media (max-width: 760px){
   .block-container{ padding-top: 1.4rem; padding-bottom: 4.2rem; }
+  .hero-top-left{ font-size: 0.74rem; padding: 0.24rem 0.62rem; margin-bottom: 0.5rem; }
+  .hero-brand{ gap: 0.75rem; }
+  .hero-title-row{ gap: 0.55rem; }
+  .hero-logo{ width: 48px; min-width: 48px; height: 48px; border-radius: 10px; }
   .hero-title{ font-size: 1.78rem; line-height: 1.12; }
   .hero-sub{ font-size: 0.95rem; }
   .credits-footer{ font-size: 0.82rem; padding: 0.52rem 0.6rem; }
@@ -246,6 +295,31 @@ h1, h2, h3, .hero-title, .card-title, .stMetricLabel, .stButton button { font-fa
 # Helpers
 # =========================
 MAX_MB = 200.0
+LOGO_CANDIDATES = [
+    Path(__file__).resolve().parent / "assets" / "verivid-logo.png",
+    Path(__file__).resolve().parent / "assets" / "logo.png",
+]
+
+
+def get_logo_data_uri() -> str | None:
+    """Return data URI for a local logo image if available."""
+    mime_by_ext = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".svg": "image/svg+xml",
+    }
+    for logo_path in LOGO_CANDIDATES:
+        if not logo_path.exists():
+            continue
+        ext = logo_path.suffix.lower()
+        mime = mime_by_ext.get(ext)
+        if not mime:
+            continue
+        b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+        return f"data:{mime};base64,{b64}"
+    return None
 
 def explain_mode(mode_key: str) -> str:
     if mode_key == "f1":
@@ -324,18 +398,32 @@ def main():
 
     # ===== Hero + Quick summary
     hleft, hright = st.columns([1.55, 1.0], gap="large")
+    logo_data_uri = get_logo_data_uri()
+    logo_html = (
+        f'<img class="hero-logo" src="{logo_data_uri}" alt="VeriVid logo">'
+        if logo_data_uri
+        else ""
+    )
 
     with hleft:
         st.markdown(
-            """
+            f"""
+<div class="hero-top-left">AI video detector platform</div>
 <div class="hero">
-  <div class="hero-title">AI Video Detector</div>
-  <div class="hero-sub">Detect AI-generated or manipulated videos using deep learning (ResNet50 + LSTM).</div>
-  <div class="badges">
-    <div class="badge">Binary output</div>
-    <div class="badge">Confidence score</div>
-    <div class="badge">Local inference</div>
-    <div class="badge">MP4 / AVI / MOV / MKV / WebM</div>
+  <div class="hero-brand">
+    <div class="hero-copy">
+      <div class="hero-title-row">
+        {logo_html}
+        <div class="hero-title"><span class="hero-brand-name">VeriVid</span> : AI video detector</div>
+      </div>
+      <div class="hero-sub">Detect AI-generated or manipulated videos using deep learning (ResNet50 + LSTM).</div>
+      <div class="badges">
+        <div class="badge">Binary output</div>
+        <div class="badge">Confidence score</div>
+        <div class="badge">Local inference</div>
+        <div class="badge">MP4 / AVI / MOV / MKV / WebM</div>
+      </div>
+    </div>
   </div>
 </div>
 """,
