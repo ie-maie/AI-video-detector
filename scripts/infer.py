@@ -2,6 +2,7 @@ import torch
 import cv2
 import torchvision.transforms as T
 from src.model import VideoDetector
+from src.gdrive import get_model_path
 import argparse
 import os
 import numpy as np
@@ -27,7 +28,6 @@ def check_ffmpeg():
 FFMPEG_AVAILABLE = check_ffmpeg()
 
 # ---------------- CONFIG ----------------
-MODEL_PATH = "models/best_model.pth"
 NUM_FRAMES = 30
 IMG_SIZE = 224
 
@@ -287,10 +287,11 @@ def infer(video_path, mode='f1'):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     threshold = THRESHOLDS[mode]
+    model_path = str(get_model_path())
 
     # Load model
     model = VideoDetector().to(device)
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
 
     # Same normalization as ResNet training

@@ -7,34 +7,34 @@ import shutil
 from pathlib import Path
 
 from src.model import VideoDetector
+from src.gdrive import get_model_path
 from scripts.infer import infer
 
 
 # =========================
-# Fix: make infer() find the model where it expects it
-# infer() looks for: models/best_model.pth
-# If your model is already there, we do nothing.
-# If you later move it elsewhere, this function can copy it safely.
+# Download model from Google Drive if not available locally
 # =========================
 def ensure_infer_model_path():
+    """
+    Ensures the model file is available locally.
+    Downloads from Google Drive if the file is missing/invalid.
+    """
     base_dir = Path(__file__).resolve().parent
-    src = base_dir / "models" / "best_model.pth"
     dst_dir = base_dir / "models"
     dst = dst_dir / "best_model.pth"
 
-    if src.exists():
+    try:
         dst_dir.mkdir(parents=True, exist_ok=True)
+        model_path = get_model_path()
 
-        # Prevent copying a file onto itself (SameFileError)
-        try:
-            if src.resolve() != dst.resolve():
-                shutil.copy2(src, dst)
-        except Exception:
-            # If resolve fails for any reason, fall back to safe behavior
-            if str(src) != str(dst):
-                shutil.copy2(src, dst)
+        # If get_model_path returned a different path, copy it to the expected location
+        if model_path != dst:
+            shutil.copy2(model_path, dst)
+        return None
+    except Exception as e:
+        return str(e)
 
-ensure_infer_model_path()
+MODEL_SETUP_ERROR = ensure_infer_model_path()
 
 
 # =========================
@@ -55,7 +55,7 @@ def load_model():
         model.to(device)
         model.eval()
         return model, device
-    except:
+    except Exception:
         return None
 
 
@@ -65,7 +65,7 @@ def load_model():
 st.set_page_config(
     page_title="AI Video Detector",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -75,41 +75,83 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-/* Layout */
-.block-container { padding-top: 2.2rem; padding-bottom: 2rem; max-width: 1200px; }
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,400,0,0&display=swap');
+
+:root{
+  --bg-1: #061726;
+  --bg-2: #0f2b2a;
+  --panel: rgba(255,255,255,0.06);
+  --panel-strong: rgba(255,255,255,0.09);
+  --border: rgba(170, 224, 209, 0.22);
+  --text-soft: rgba(232,245,244,0.78);
+  --accent: #58e4c7;
+  --accent-2: #6ec9ff;
+}
+
+/* App background + layout */
+[data-testid="stAppViewContainer"]{
+  background:
+    radial-gradient(80rem 60rem at 8% -12%, rgba(95, 220, 199, 0.22), rgba(0,0,0,0)),
+    radial-gradient(70rem 54rem at 102% 8%, rgba(91, 161, 252, 0.20), rgba(0,0,0,0)),
+    linear-gradient(145deg, var(--bg-1), var(--bg-2));
+}
+.block-container { padding-top: 2.2rem; padding-bottom: 5.5rem; max-width: 1200px; }
+
+/* Typography */
+html, body, .stApp { font-family: "IBM Plex Sans", sans-serif; }
+h1, h2, h3, .hero-title, .card-title, .stMetricLabel, .stButton button { font-family: "Sora", sans-serif !important; }
+/* Keep Streamlit icon glyphs from rendering as raw text like _arrow_right */
+.material-symbols-rounded,
+[class*="material-symbols"],
+.material-icons {
+  font-family: "Material Symbols Rounded" !important;
+  font-style: normal;
+  font-weight: 400;
+}
 
 /* HERO */
 .hero {
-    border: 1px solid rgba(255,255,255,0.10);
-    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
     border-radius: 20px;
-    padding: 1.35rem 1.45rem;
-    box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+    padding: 1.45rem 1.5rem;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.32);
+    backdrop-filter: blur(5px);
 }
-.hero-title{ font-size: 2.25rem; font-weight: 900; margin:0; letter-spacing: 0.2px; line-height:1.1; }
+.hero-title{
+    font-size: 2.35rem;
+    font-weight: 900;
+    margin:0;
+    letter-spacing: 0.2px;
+    line-height:1.08;
+    background: linear-gradient(90deg, #f4fffd 0%, #b8fff1 42%, #a3d6ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
 .hero-sub{ opacity: 0.86; margin-top: 0.45rem; margin-bottom: 0.95rem; font-size: 1.02rem; }
 
 .badges{ display:flex; gap:0.55rem; flex-wrap:wrap; }
 .badge{
-    border: 1px solid rgba(255,255,255,0.12);
-    background: rgba(0,0,0,0.18);
+    border: 1px solid var(--border);
+    background: rgba(7, 28, 35, 0.48);
     border-radius: 999px;
     padding: 0.34rem 0.70rem;
     font-size: 0.90rem;
-    opacity: 0.95;
+    opacity: 0.96;
 }
 
 /* CARDS */
 .card{
-    border: 1px solid rgba(255,255,255,0.10);
-    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    background: var(--panel);
     border-radius: 20px;
     padding: 1.10rem 1.20rem;
     margin-bottom: 1rem;
-    box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+    backdrop-filter: blur(6px);
 }
 .card-title{ font-size: 1.08rem; font-weight: 800; margin-bottom: 0.65rem; }
-.muted{ opacity:0.78; font-size:0.94rem; line-height:1.35; }
+.muted{ color: var(--text-soft); font-size:0.94rem; line-height:1.35; }
 
 /* RESULTS */
 .result{ border-left: 6px solid rgba(255,255,255,0.12); }
@@ -118,19 +160,79 @@ st.markdown(
 
 /* Button */
 .stButton > button[kind="primary"]{
-    border-radius: 14px !important;
+    border-radius: 12px !important;
     font-weight: 800 !important;
     padding: 0.75rem 1rem !important;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)) !important;
+    border: none !important;
+    color: #05202d !important;
+    box-shadow: 0 8px 18px rgba(57, 189, 225, 0.28);
 }
+.stButton > button[kind="primary"]:hover{
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+}
+
+/* Tabs + metrics */
+[data-baseweb="tab"]{
+  font-family: "Sora", sans-serif !important;
+  font-weight: 700 !important;
+}
+[data-baseweb="tab-highlight"]{
+  background: linear-gradient(90deg, var(--accent), var(--accent-2)) !important;
+}
+[data-testid="stMetric"]{
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.5rem 0.65rem;
+}
+
+/* Hide sidebar and its toggle control entirely */
+[data-testid="stSidebar"]{ display: none !important; }
+[data-testid="collapsedControl"]{ display: none !important; }
 
 /* Make expanders look nicer */
 [data-testid="stExpander"]{
-  border: 1px solid rgba(255,255,255,0.10) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 16px !important;
-  background: rgba(0,0,0,0.14) !important;
+  background: rgba(5,24,31,0.34) !important;
 }
 
-/* KILL EMPTY RECTANGLES */
+/* Footer credits */
+.credits-footer{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  text-align: center;
+  padding: 0.62rem 0.8rem;
+  font-family: "Sora", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: rgba(240, 255, 251, 0.90);
+  border-top: 1px solid var(--border);
+  background: rgba(4,16,24,0.78);
+  backdrop-filter: blur(6px);
+}
+
+/* Motion */
+@keyframes fadeRise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero, .card, .result { animation: fadeRise 0.42s ease-out both; }
+
+/* Mobile */
+@media (max-width: 760px){
+  .block-container{ padding-top: 1.4rem; padding-bottom: 4.2rem; }
+  .hero-title{ font-size: 1.78rem; line-height: 1.12; }
+  .hero-sub{ font-size: 0.95rem; }
+  .credits-footer{ font-size: 0.82rem; padding: 0.52rem 0.6rem; }
+}
+
+/* Hide occasional empty containers */
 .stTabs [data-baseweb="tab-list"] + div:empty { display: none !important; }
 [data-testid="stVerticalBlock"] div:empty { display: none !important; }
 [data-testid="stMarkdownContainer"]:empty { display: none !important; }
@@ -205,34 +307,17 @@ def main():
     model_pack = load_model()
     model_ready = model_pack is not None
     device_label = "CUDA (GPU)" if torch.cuda.is_available() else "CPU"
-    model_status = "Loaded" if model_ready else "Missing model file (models/best_model.pth)"
-
-    # ===== Sidebar
-    with st.sidebar:
-        st.markdown("**CHOOSE YOUR MODE HERE**")
-        st.header("Controls")
-
-        mode_label = st.radio(
-            "Detection mode",
-            ["F1-Optimal (Balanced)", "Recall-Constrained (High Security)"]
-        )
-        mode = "f1" if "F1" in mode_label else "recall"
-
-        with st.expander("Mode explanation", expanded=True):
-            st.markdown(explain_mode(mode))
-
-        st.divider()
-        st.header("Metrics (indicative)")
-        if mode == "f1":
-            st.metric("Accuracy", "82.1%")
-            st.metric("Fake Detection", "86.2%")
-            st.metric("Real Detection", "77.8%")
+    model_issue = None
+    if MODEL_SETUP_ERROR:
+        model_issue = f"Startup download failed: {MODEL_SETUP_ERROR}"
+    elif not model_ready:
+        model_path = Path(__file__).resolve().parent / "models" / "best_model.pth"
+        if not model_path.exists():
+            model_issue = "Missing model file at models/best_model.pth"
         else:
-            st.metric("Accuracy", "75.9%")
-            st.metric("Fake Detection", "91.1%")
-            st.metric("Real Detection", "59.3%")
+            model_issue = "Model file exists but failed to load"
 
-        st.caption(f"Device: {device_label} · Model: {model_status}")
+    model_status = "Loaded" if model_ready else "Unavailable"
 
     # Push the top cards slightly lower
     st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
@@ -266,7 +351,7 @@ def main():
     Run a local check in seconds. Pick a mode based on your risk tolerance.
   </div>
   <ol class="muted" style="margin:0; padding-left: 1.2rem;">
-    <li><b>Upload</b> a video (≤ 200 MB)</li>
+    <li><b>Upload</b> a video (&lt;= 200 MB)</li>
     <li><b>Select</b> a detection mode</li>
     <li><b>Analyze</b> and read confidence</li>
   </ol>
@@ -285,18 +370,38 @@ def main():
         st.markdown(
             """
 <div class="card">
+  <div class="card-title">Detection Mode</div>
+  <div class="muted">Pick your mode, then upload and analyze.</div>
+</div>
+""",
+            unsafe_allow_html=True
+        )
+
+        mode_label = st.radio(
+            "Detection mode",
+            ["F1-Optimal (Balanced)", "Recall-Constrained (High Security)"],
+            horizontal=True
+        )
+        mode = "f1" if "F1" in mode_label else "recall"
+
+        with st.expander("Mode explanation", expanded=False):
+            st.markdown(explain_mode(mode))
+
+        st.markdown(
+            """
+<div class="card">
   <div class="card-title">Upload and Analyze</div>
   <div class="muted">Upload a video file, then run the detector. Results appear below.</div>
 </div>
 """,
             unsafe_allow_html=True
         )
-
         uploaded_file = st.file_uploader(
             "Upload video",
             type=["mp4", "avi", "mov", "mkv", "webm"],
             label_visibility="collapsed"
         )
+        st.caption(f"Runtime: {device_label} | Model: {model_status}")
 
         video_path = None
         if uploaded_file:
@@ -310,7 +415,10 @@ def main():
 
         analyze_disabled = (video_path is None) or (not model_ready)
         if not model_ready:
-            st.warning("Model file is missing. Please add `models/best_model.pth` to enable analysis.")
+            if model_issue:
+                st.warning(f"Model unavailable: {model_issue}")
+            else:
+                st.warning("Model unavailable. Check logs for model download/load errors.")
 
         analyze = st.button("Analyze video", type="primary", disabled=analyze_disabled)
 
@@ -349,7 +457,7 @@ def main():
                     f"""
 <div class="card result {cls}">
   <div class="card-title">{title}</div>
-  <div class="muted">Mode: <b>{mode_label}</b> · Threshold: <b>{threshold}</b></div>
+  <div class="muted">Mode: <b>{mode_label}</b> | Threshold: <b>{threshold}</b></div>
   <div style="margin-top:0.55rem;"><b>Confidence:</b> {confidence:.1%} <span class="muted">({bucket})</span></div>
 </div>
 """,
@@ -428,6 +536,15 @@ def main():
                     z.metric("Level", confidence_bucket(ex["conf"]))
                     st.progress(float(ex["conf"]))
                     st.caption(ex["note"])
+
+    st.markdown(
+        """
+<div class="credits-footer">
+  Developped by Wiam Bouimejane and Wafae Waaziz
+</div>
+""",
+        unsafe_allow_html=True
+    )
 
 
 if __name__ == "__main__":
