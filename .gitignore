@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -79,3 +80,16 @@ Thumbs.db
 *.log
 data/
 models/*.pth
+=======
+streamlit==1.53.1
+numpy
+pandas
+Pillow
+opencv-python-headless
+torch
+torchvision
+torchaudio
+scikit-learn
+tqdm
+matplotlib
+>>>>>>> teammate/main
