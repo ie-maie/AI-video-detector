@@ -59,6 +59,7 @@ coverage.xml
 # Data and models
 /data/
 /models/
+/results/cv_analysis/
 
 # Virtual environments
 venv/
@@ -66,11 +67,9 @@ venv/
 # UCF101 dataset
 UCF101/
 
-# Ignore report and readme
-AI_video_detector_report.tex
-README.md
-TODO.md
+# Local drafts and personal notes (keep report.md tracked)
 notes.txt
+report.md
 
 # OS files
 .DS_Store
