@@ -56,10 +56,15 @@ coverage.xml
 # VS Code
 .vscode/
 
-# Data and models
+
 /data/
 /models/
 /results/cv_analysis/
+testvid0.mp4
+testvid1.mp4
+testvid2.mp4
+testvid3.mp4
+testvid4.mp4
 
 # Virtual environments
 venv/
